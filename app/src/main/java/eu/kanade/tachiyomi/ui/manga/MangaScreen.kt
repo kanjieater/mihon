@@ -110,6 +110,19 @@ class MangaScreen(
 
         val successState = state as MangaScreenModel.State.Success
         val isHttpSource = remember { successState.source is HttpSource }
+        var isOpeningReader by remember { mutableStateOf(false) }
+        val openReader: (() -> Unit) -> Unit = { open ->
+            if (!isOpeningReader) {
+                isOpeningReader = true
+                scope.launch {
+                    try {
+                        if (screenModel.prepareToRead()) open()
+                    } finally {
+                        isOpeningReader = false
+                    }
+                }
+            }
+        }
 
         LaunchedEffect(successState.manga, screenModel.source) {
             if (isHttpSource) {
@@ -131,7 +144,7 @@ class MangaScreen(
             chapterSwipeStartAction = screenModel.chapterSwipeStartAction,
             chapterSwipeEndAction = screenModel.chapterSwipeEndAction,
             navigateUp = navigator::pop,
-            onChapterClicked = { openChapter(context, it) },
+            onChapterClicked = { chapter -> openReader { openChapter(context, chapter) } },
             onDownloadChapter = screenModel::runChapterDownloadActions.takeIf { !successState.source.isLocalOrStub() },
             onAddToLibraryClicked = {
                 screenModel.toggleFavorite()
@@ -161,7 +174,9 @@ class MangaScreen(
             onTagSearch = { scope.launch { performGenreSearch(navigator, it, screenModel.source!!) } },
             onFilterButtonClicked = screenModel::showSettingsDialog,
             onRefresh = screenModel::fetchAllFromSource,
-            onContinueReading = { continueReading(context, screenModel.getNextUnreadChapter()) },
+            onContinueReading = {
+                openReader { continueReading(context, screenModel.getNextUnreadChapter()) }
+            },
             onSearch = { query, global -> scope.launch { performSearch(navigator, query, global) } },
             onCoverClicked = screenModel::showCoverDialog,
             onShareClicked = { shareManga(context, screenModel.manga, screenModel.source) }.takeIf { isHttpSource },

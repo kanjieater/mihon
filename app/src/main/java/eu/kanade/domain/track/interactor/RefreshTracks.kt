@@ -5,6 +5,7 @@ import eu.kanade.domain.track.model.toDomainTrack
 import eu.kanade.tachiyomi.data.track.PageTracker
 import eu.kanade.tachiyomi.data.track.Tracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.supervisorScope
@@ -39,25 +40,34 @@ class RefreshTracks(
      * @return Failed updates.
      */
     suspend fun await(mangaId: Long): List<Pair<Tracker?, Throwable>> {
-        return await(mangaId) { true }
+        return automaticRefreshMutex.withLock {
+            val failures = await(mangaId) { true }
+            if (failures.isEmpty()) {
+                lastAutomaticRefresh[mangaId] = TimeSource.Monotonic.markNow()
+            } else {
+                lastAutomaticRefresh.remove(mangaId)
+            }
+            failures
+        }
     }
 
     suspend fun awaitPageTrackersIfStale(
         mangaId: Long,
         maxAge: Duration = 1.minutes,
     ): PageTrackerRefreshResult {
-        val (shouldRefresh, nextRefreshIn) = automaticRefreshMutex.withLock {
-            val lastRefresh = lastAutomaticRefresh[mangaId]
-            val elapsed = lastRefresh?.elapsedNow()
+        // Keep the lock until the pull finishes: readers must not treat an in-flight
+        // or cancelled refresh as fresh and overwrite remote progress.
+        return automaticRefreshMutex.withLock {
+            val elapsed = lastAutomaticRefresh[mangaId]?.elapsedNow()
             if (elapsed != null && elapsed < maxAge) {
-                false to (maxAge - elapsed)
-            } else {
-                lastAutomaticRefresh[mangaId] = TimeSource.Monotonic.markNow()
-                true to maxAge
+                return@withLock PageTrackerRefreshResult(emptyList(), maxAge - elapsed)
             }
+            val failures = await(mangaId) { it is PageTracker }
+            if (failures.isEmpty()) {
+                lastAutomaticRefresh[mangaId] = TimeSource.Monotonic.markNow()
+            }
+            PageTrackerRefreshResult(failures, maxAge)
         }
-        val failures = if (shouldRefresh) await(mangaId) { it is PageTracker } else emptyList()
-        return PageTrackerRefreshResult(failures, nextRefreshIn)
     }
 
     private suspend fun await(
@@ -79,6 +89,7 @@ class RefreshTracks(
                                 syncChapterProgressWithTrack.await(mangaId, updatedTrack, service)
                                 null
                             } catch (e: Throwable) {
+                                if (e is CancellationException) throw e
                                 service to e
                             }
                         }

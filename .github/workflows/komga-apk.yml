@@ -1,0 +1,58 @@
+name: Komga Sync APK (S25 Ultra)
+on:
+  workflow_dispatch:
+  push:
+    branches: [komga-page-sync]
+    paths-ignore: ['**.md']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: komga-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520
+        with:
+          java-version-file: .github/.java-version
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92
+      - name: Configure persistent personal signing key
+        env:
+          SIGNING_KEY: ${{ secrets.KOMGA_SIGNING_KEY }}
+          KEY_PASSWORD: ${{ secrets.KOMGA_KEY_PASSWORD }}
+        run: |
+          umask 077
+          printf '%s' "$SIGNING_KEY" | base64 --decode > "$RUNNER_TEMP/komga-sync.p12"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=komga-sync\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/komga-sync.p12" "$KEY_PASSWORD" "$KEY_PASSWORD" > keystore.properties
+      - name: Check formatting
+        run: ./gradlew spotlessCheck
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest
+      - name: Verify database migrations
+        run: ./gradlew verifySqlDelightMigration
+      - name: Build signed APK (no telemetry or upstream updater)
+        run: ./gradlew assemblePreview
+      - name: Upload S25 Ultra ARM64 APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: mihon-komga-s25u-${{ github.sha }}
+          path: app/build/outputs/apk/preview/app-arm64-v8a-preview.apk
+          if-no-files-found: error
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: komga-test-results
+          path: '**/build/reports/tests/'
+      - name: Remove signing material
+        if: always()
+        run: rm -f keystore.properties "$RUNNER_TEMP/komga-sync.p12"

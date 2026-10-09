@@ -799,6 +799,25 @@ class MangaScreenModel(
         return result.nextRefreshIn
     }
 
+    suspend fun prepareToRead(
+        refreshTracks: RefreshTracks = Injekt.get(),
+    ): Boolean {
+        val result = refreshTracks.awaitPageTrackersIfStale(mangaId)
+        if (result.failures.isNotEmpty()) {
+            result.failures.forEach { (tracker, error) ->
+                logcat(LogPriority.ERROR, error) { "Failed to refresh page tracker before reading mangaId=$mangaId" }
+                context.toast(context.stringResource(MR.strings.track_error, tracker?.name ?: "", error.message ?: ""))
+            }
+            return false
+        }
+        // Read back the committed progress rather than racing the state-flow collector.
+        val manga = getMangaAndChapters.awaitManga(mangaId)
+        val chapters = getMangaAndChapters.awaitChapters(mangaId, applyScanlatorFilter = true)
+            .toChapterListItems(manga)
+        updateSuccessState { it.copy(manga = manga, chapters = chapters) }
+        return true
+    }
+
     /**
      * Downloads the given list of chapters with the manager.
      * @param chapters the list of chapters to download.
