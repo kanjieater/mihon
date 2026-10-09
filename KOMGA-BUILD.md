@@ -1,6 +1,6 @@
 # Personal Komga page-sync build
 
-Based on [Mihon PR #3481](https://github.com/mihonapp/mihon/pull/3481), head `a968d15c65add7b4b12a9b561782ae0439aa2684`, with both pgosar patches from the July 19 comments.
+Based on [Mihon PR #3481](https://github.com/mihonapp/mihon/pull/3481), head `a968d15c65add7b4b12a9b561782ae0439aa2684`, with both pgosar patches from the July 19 comments. Merged upstream `main` through `ab7ee00c4` (October 9, 2026), preserving the custom sync behavior and porting it to upstream's Metro DI, ViewModels, and partial-update APIs.
 
 ## Behavior
 
@@ -17,12 +17,14 @@ For Komga as the source of truth, choose **Use tracker progress** in the sync-st
 
 ## Install on Samsung S25 Ultra
 
-Use the signed **arm64-v8a** APK from this fork's Releases. Package ID is `app.mihon.debug` (the preview variant), so it installs alongside official Mihon rather than requiring its private signing key. Export a backup from the existing app, restore it here, and configure Komga and extension repositories as needed. Do not uninstall the original app before verifying the restore.
+Use the signed **arm64-v8a** APK from this fork's Releases. Package ID is `app.mihon.debug` (the nightly variant; same package and signing key as the previous preview APK), so it installs alongside official Mihon rather than requiring its private signing key. Export a backup from the existing app, restore it here, and configure Komga and extension repositories as needed. Do not uninstall the original app before verifying the restore.
 
-Telemetry and the upstream auto-updater are disabled for this custom build. Updates must use APKs from this fork, signed with the same personal key.
+Telemetry and the upstream auto-updater are explicitly disabled for this custom build. Updates must use APKs from this fork, signed with the same personal key.
+
+The build flag `-Pdisable-update-nag=true` sets `BuildConfig.DISABLE_UPDATE_NAG` and suppresses automatic app-update checks and prompts on startup even if the updater is enabled. It defaults to false for other builds and leaves manual About-screen checks and extension-update notifications unchanged. The personal APK workflow enables this flag and also passes `-Penable-updater=false -Pinclude-telemetry=false` explicitly.
 
 ## Rebuild
 
-Push to `komga-page-sync`, or manually run **Komga Sync APK (S25 Ultra)** in GitHub Actions. The workflow checks formatting, runs unit tests and SQLDelight migration verification, then builds `assemblePreview` and uploads the ARM64 APK.
+Push to `komga-page-sync`, or manually run **Komga Sync APK (S25 Ultra)** in GitHub Actions. The workflow checks formatting, runs unit tests and SQLDelight migration verification, then builds `assembleNightly -Pdisable-update-nag=true -Penable-updater=false -Pinclude-telemetry=false` and uploads the ARM64 APK.
 
 Signing material is stored in GitHub Actions secrets `KOMGA_SIGNING_KEY` and `KOMGA_KEY_PASSWORD`, not in Git. A private local backup is retained outside the checkout in `~/.local/share/mihon-build/`.

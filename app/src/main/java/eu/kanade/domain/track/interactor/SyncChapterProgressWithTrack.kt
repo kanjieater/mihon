@@ -2,12 +2,12 @@ package eu.kanade.domain.track.interactor
 
 import android.app.Application
 import com.google.common.annotations.VisibleForTesting
+import dev.zacsweers.metro.Inject
 import eu.kanade.domain.chapter.model.toDbChapter
 import eu.kanade.domain.track.model.toDbTrack
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.data.database.models.Chapter
-import eu.kanade.tachiyomi.data.database.models.toDomainChapter
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.PageTracker
 import eu.kanade.tachiyomi.data.track.Tracker
@@ -16,16 +16,17 @@ import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.UpdateChapter
-import tachiyomi.domain.chapter.model.toChapterUpdate
-import tachiyomi.domain.track.interactor.InsertTrack
+import tachiyomi.domain.chapter.model.ChapterUpdate
+import tachiyomi.domain.track.interactor.UpsertTrack
 import tachiyomi.domain.track.model.Track
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import kotlin.math.max
 
+@Inject
 class SyncChapterProgressWithTrack(
     private val updateChapter: UpdateChapter,
-    private val insertTrack: InsertTrack,
+    private val upsertTrack: UpsertTrack,
     private val getChaptersByMangaId: GetChaptersByMangaId,
     private val trackPreferences: TrackPreferences,
 ) {
@@ -108,7 +109,7 @@ class SyncChapterProgressWithTrack(
 
         val chapterUpdates = sortedChapters
             .filter { chapter -> chapter.chapterNumber <= remoteTrack.lastChapterRead && !chapter.read }
-            .map { it.copy(read = true).toChapterUpdate() }
+            .map { ChapterUpdate(it.id) { read = true } }
 
         // only take into account continuous reading
         val localLastRead = sortedChapters.takeWhile { it.read }.lastOrNull()?.chapterNumber ?: 0F
@@ -126,10 +127,12 @@ class SyncChapterProgressWithTrack(
                             (chapter.last_page_read != remote.page - 1 || chapter.read != remote.completed)
                         ) {
                             // In komga page starts from 1
-                            chapter.toDomainChapter()?.copy(
-                                lastPageRead = remote.page.toLong() - 1,
-                                read = remote.completed,
-                            )?.toChapterUpdate()
+                            chapter.id?.let { id ->
+                                ChapterUpdate(id) {
+                                    lastPageRead = remote.page.toLong() - 1
+                                    read = remote.completed
+                                }
+                            }
                         } else {
                             null
                         }
@@ -150,7 +153,7 @@ class SyncChapterProgressWithTrack(
                 tracker.update(updatedTrack.toDbTrack())
                 updateChapter.awaitAll(chapterUpdates)
             }
-            insertTrack.await(updatedTrack)
+            upsertTrack.await(updatedTrack)
         } catch (e: Throwable) {
             logcat(LogPriority.WARN, e)
         }

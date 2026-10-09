@@ -1,23 +1,28 @@
 package tachiyomi.domain.manga.model
 
+import android.annotation.SuppressLint
 import androidx.compose.runtime.Immutable
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import mihon.core.common.extensions.EMPTY
 import tachiyomi.core.common.preference.TriState
-import java.io.Serializable
-import java.time.Instant
+import java.io.ObjectStreamException
+import kotlin.time.Instant
+import java.io.Serializable as JavaSerializable
 
+@SuppressLint("UnsafeOptInUsageError")
+@Serializable
 @Immutable
 data class Manga(
     val id: Long,
     val source: Long,
-    val favorite: Boolean,
     val lastUpdate: Long,
     val nextUpdate: Long,
     val fetchInterval: Int,
-    val dateAdded: Long,
+    val favoriteAt: Long?,
     val viewerFlags: Long,
     val chapterFlags: Long,
     val coverLastModified: Long,
@@ -31,17 +36,17 @@ data class Manga(
     val thumbnailUrl: String?,
     val updateStrategy: UpdateStrategy,
     val initialized: Boolean,
-    val lastModifiedAt: Long,
-    val favoriteModifiedAt: Long?,
-    val version: Long,
     val notes: String,
     val memo: JsonObject,
-) : Serializable {
+) : JavaSerializable {
+
+    val favorite: Boolean
+        get() = favoriteAt != null
 
     val expectedNextUpdate: Instant?
         get() = nextUpdate
             .takeIf { status != SManga.COMPLETED.toLong() }
-            ?.let { Instant.ofEpochMilli(it) }
+            ?.let { Instant.fromEpochMilliseconds(it) }
 
     val sorting: Long
         get() = chapterFlags and CHAPTER_SORTING_MASK
@@ -111,11 +116,10 @@ data class Manga(
             url = "",
             title = "",
             source = -1L,
-            favorite = false,
             lastUpdate = 0L,
             nextUpdate = 0L,
             fetchInterval = 0,
-            dateAdded = 0L,
+            favoriteAt = null,
             viewerFlags = 0L,
             chapterFlags = 0L,
             coverLastModified = 0L,
@@ -127,11 +131,21 @@ data class Manga(
             thumbnailUrl = null,
             updateStrategy = UpdateStrategy.ALWAYS_UPDATE,
             initialized = false,
-            lastModifiedAt = 0L,
-            favoriteModifiedAt = null,
-            version = 0L,
             notes = "",
             memo = JsonObject.EMPTY,
         )
+    }
+
+    @Throws(ObjectStreamException::class)
+    private fun writeReplace(): Any {
+        return JavaToKotlinXSerializable(Json.encodeToString<Manga>(this))
+    }
+
+    class JavaToKotlinXSerializable(private val data: String) : JavaSerializable {
+
+        @Throws(ObjectStreamException::class)
+        private fun readResolve(): Any {
+            return Json.decodeFromString<Manga>(data)
+        }
     }
 }

@@ -15,14 +15,14 @@ import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.track.interactor.GetTracks
-import tachiyomi.domain.track.interactor.InsertTrack
+import tachiyomi.domain.track.interactor.UpsertTrack
 
 class RefreshTracksTest {
     private val getTracks = mockk<GetTracks>()
     private val refreshTracks = RefreshTracks(
         getTracks,
         mockk<TrackerManager>(),
-        mockk<InsertTrack>(),
+        mockk<UpsertTrack>(),
         mockk<SyncChapterProgressWithTrack>(),
     )
 

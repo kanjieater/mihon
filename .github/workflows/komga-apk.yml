@@ -40,12 +40,12 @@ jobs:
       - name: Verify database migrations
         run: ./gradlew verifySqlDelightMigration
       - name: Build signed APK (no telemetry or upstream updater)
-        run: ./gradlew assemblePreview
+        run: ./gradlew assembleNightly -Pdisable-update-nag=true -Penable-updater=false -Pinclude-telemetry=false
       - name: Upload S25 Ultra ARM64 APK
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: mihon-komga-s25u-${{ github.sha }}
-          path: app/build/outputs/apk/preview/app-arm64-v8a-preview.apk
+          path: app/build/outputs/apk/nightly/app-arm64-v8a-nightly.apk
           if-no-files-found: error
       - name: Upload test results
         if: always()

@@ -1,5 +1,8 @@
 package eu.kanade.domain.track.interactor
 
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import eu.kanade.domain.track.model.toDbTrack
 import eu.kanade.domain.track.model.toDomainTrack
 import eu.kanade.tachiyomi.data.track.PageTracker
@@ -13,16 +16,18 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.track.interactor.GetTracks
-import tachiyomi.domain.track.interactor.InsertTrack
+import tachiyomi.domain.track.interactor.UpsertTrack
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
+@Inject
+@SingleIn(AppScope::class)
 class RefreshTracks(
     private val getTracks: GetTracks,
     private val trackerManager: TrackerManager,
-    private val insertTrack: InsertTrack,
+    private val upsertTrack: UpsertTrack,
     private val syncChapterProgressWithTrack: SyncChapterProgressWithTrack,
 ) {
 
@@ -85,7 +90,7 @@ class RefreshTracks(
                             return@async try {
                                 val service = service!!
                                 val updatedTrack = service.refresh(track.toDbTrack()).toDomainTrack()!!
-                                insertTrack.await(updatedTrack)
+                                upsertTrack.await(updatedTrack)
                                 syncChapterProgressWithTrack.await(mangaId, updatedTrack, service)
                                 null
                             } catch (e: Throwable) {
