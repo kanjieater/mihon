@@ -539,7 +539,7 @@ class ReaderViewModel @JvmOverloads constructor(
         }
         readerChapter.requestedPage = pageIndex
         chapterPageIndex = pageIndex
-        updatePageReadProgress(readerChapter)
+        updatePageReadProgress(readerChapter, pageIndex)
 
         if (!incognitoMode && page.status !is Page.State.Error) {
             readerChapter.chapter.last_page_read = pageIndex
@@ -922,13 +922,14 @@ class ReaderViewModel @JvmOverloads constructor(
         }
     }
 
-    private fun updatePageReadProgress(readerChapter: ReaderChapter) {
+    private fun updatePageReadProgress(readerChapter: ReaderChapter, pageIndex: Int) {
         if (incognitoMode) return
         if (!trackPreferences.autoUpdateTrack.get()) return
 
         val manga = manga ?: return
         viewModelScope.launchNonCancellable {
-            trackChapter.reportPageProgress(manga.id, readerChapter.chapter.url, chapterPageIndex)
+            // Capture this page turn's index rather than reading a mutable index later.
+            trackChapter.reportPageProgress(manga.id, readerChapter.chapter.url, pageIndex)
         }
     }
 
