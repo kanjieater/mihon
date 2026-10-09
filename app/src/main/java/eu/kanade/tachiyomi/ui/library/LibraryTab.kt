@@ -97,16 +97,14 @@ data object LibraryTab : Tab {
 
         val onClickRefresh: (Category?) -> Boolean = { category ->
             val started = LibraryUpdateJob.startNow(context, category)
-            if (started) {
-                val mangaIds = when (category) {
-                    null -> state.libraryData.favorites.map { it.id }
-                    else -> state.getItemsForCategory(category).map { it.id }
-                }
-                scope.launchIO {
-                    val refreshTracks = Injekt.get<RefreshTracks>()
-                    mangaIds.forEach { mangaId ->
-                        refreshTracks.await(mangaId)
-                    }
+            val mangaIds = when (category) {
+                null -> state.libraryData.favorites.map { it.id }
+                else -> state.getItemsForCategory(category).map { it.id }
+            }
+            scope.launchIO {
+                val refreshTracks = Injekt.get<RefreshTracks>()
+                mangaIds.forEach { mangaId ->
+                    refreshTracks.await(mangaId)
                 }
             }
             scope.launch {

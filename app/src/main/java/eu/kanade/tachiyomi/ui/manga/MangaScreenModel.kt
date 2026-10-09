@@ -84,6 +84,7 @@ import tachiyomi.source.local.isLocal
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import kotlin.math.floor
+import kotlin.time.Duration
 
 class MangaScreenModel(
     private val context: Context,
@@ -253,7 +254,7 @@ class MangaScreenModel(
                 fetchDetails = true,
                 fetchChapters = true,
             )
-            if (manualFetch && successState?.hasLoggedInTrackers == true) {
+            if (manualFetch) {
                 refreshTrackers()
             }
             updateSuccessState { it.copy(isRefreshingData = false) }
@@ -782,6 +783,20 @@ class MangaScreenModel(
                     )
                 }
             }
+    }
+
+    suspend fun refreshPageTrackersIfStale(
+        refreshTracks: RefreshTracks = Injekt.get(),
+    ): Duration {
+        val result = refreshTracks.awaitPageTrackersIfStale(mangaId)
+        result.failures
+            .filter { it.first != null }
+            .forEach { (track, e) ->
+                logcat(LogPriority.ERROR, e) {
+                    "Failed to automatically refresh page tracker data mangaId=$mangaId for service ${track!!.id}"
+                }
+            }
+        return result.nextRefreshIn
     }
 
     /**
